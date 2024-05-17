@@ -1,0 +1,22 @@
+version=0.1
+
+[cdp-postgres-rds.deploy.parameters]
+stack_name = "CDPPostgresRDS-CF"
+s3_bucket = "cdp-ci-dev"
+region = "us-east-1"
+confirm_changeset = false
+capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND"
+
+[cdp-bulk-api-ecs-cluster.deploy.parameters]
+stack_name = "CDPBulkApiCluster-CF"
+s3_bucket = "cdp-ci-dev"
+region = "us-east-1"
+confirm_changeset = false
+capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND"
+
+[cdp-bulk-api-ecs-service.deploy.parameters]
+stack_name = "CDPBulkApiService-CF"
+s3_bucket = "cdp-ci-dev"
+region = "us-east-1"
+confirm_changeset = false
+capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND"

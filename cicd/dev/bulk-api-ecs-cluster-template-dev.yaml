@@ -1,0 +1,150 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudFormation template for creating CDP bulk api cluster, ALB, TG, SG and repository"
+
+Resources:
+  CDPBulkApiCluster:
+    Type: 'AWS::ECS::Cluster'
+    Properties:
+      ClusterName: cdp-bulk-api-ecs-cluster-dev
+      Tags:
+        - Key: "Technical:ApplicationID"
+          Value: "APP-004158"
+        - Key: "Technical:ApplicationName"
+          Value: "Amperity Integration Suite"
+        - Key: "Technical:ApplicationSubName"
+          Value: "CDP BulkApi for batch application"
+        - Key: "Technical:Environment"
+          Value: "NONPROD"
+        - Key: "Technical:PlatformOwner"
+          Value: "sujeevan.mahendran@sysco.com"
+        - Key: "Technical:PatchingOwner"
+          Value: "CLOPS"
+  CDPBulkApiFargateALB:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      Name: CDPBulkApiFargateALB
+      Scheme: internal
+      Subnets:
+        - subnet-097c382849f67d2e4
+        - subnet-0301c81558ee32019
+        - subnet-0bc4b01e060c597fa
+      Type: application
+      SecurityGroups:
+        - !GetAtt CDPBulkApiFargateAlbSG.GroupId
+      LoadBalancerAttributes:
+        - Key: "access_logs.s3.enabled"
+          Value: "true"
+        - Key: "access_logs.s3.bucket"
+          Value: "cdp-s3-elb-access-logs"
+        - Key: "access_logs.s3.prefix"
+          Value: "bulk-api"
+      Tags:
+        - Key: "Technical:ApplicationID"
+          Value: "APP-004158"
+        - Key: "Technical:ApplicationName"
+          Value: "Amperity Integration Suite"
+        - Key: "Technical:ApplicationSubName"
+          Value: "CDP BulkApi for batch application"
+        - Key: "Technical:Environment"
+          Value: "NONPROD"
+        - Key: "Technical:PlatformOwner"
+          Value: "sujeevan.mahendran@sysco.com"
+        - Key: "Technical:PatchingOwner"
+          Value: "CLOPS"
+  CDPBulkApiFargateAlbSG:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: SecurityGroup for the bulk api Fargate application load balancer
+      GroupName: CDPBulkApiFargateAlbSG
+      SecurityGroupIngress:
+        - CidrIp: 10.0.0.0/8
+          FromPort: 443
+          ToPort: 443
+          IpProtocol: TCP
+        - CidrIp: 10.0.0.0/8
+          FromPort: 8080
+          ToPort: 8080
+          IpProtocol: TCP
+        - CidrIp: 10.0.0.0/8
+          FromPort: 80
+          ToPort: 80
+          IpProtocol: TCP
+      VpcId: vpc-0e250f7222c45e412
+      Tags:
+        - Key: "Technical:ApplicationID"
+          Value: "APP-004158"
+        - Key: "Technical:ApplicationName"
+          Value: "Amperity Integration Suite"
+        - Key: "Technical:ApplicationSubName"
+          Value: "CDP BulkApi for batch application"
+        - Key: "Technical:Environment"
+          Value: "NONPROD"
+        - Key: "Technical:PlatformOwner"
+          Value: "sujeevan.mahendran@sysco.com"
+        - Key: "Technical:PatchingOwner"
+          Value: "CLOPS"
+  CDPBulkApiFargateTG:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      Name: CDPBulkApiFargateTG
+      VpcId: vpc-0e250f7222c45e412
+      Protocol: HTTP
+      Port: 8080
+      HealthCheckPath: /cdp-bulk-api/health
+      UnhealthyThresholdCount: 3
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 3
+      TargetType: ip
+      Tags:
+        - Key: "Technical:ApplicationID"
+          Value: "APP-004158"
+        - Key: "Technical:ApplicationName"
+          Value: "Amperity Integration Suite"
+        - Key: "Technical:ApplicationSubName"
+          Value: "CDP BulkApi for batch application"
+        - Key: "Technical:Environment"
+          Value: "NONPROD"
+        - Key: "Technical:PlatformOwner"
+          Value: "sujeevan.mahendran@sysco.com"
+        - Key: "Technical:PatchingOwner"
+          Value: "CLOPS"
+  CDPBatchJobRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: "cdp-bulk-api-repo"
+      Tags:
+        - Key: "Technical:ApplicationID"
+          Value: "APP-004158"
+        - Key: "Technical:ApplicationName"
+          Value: "Amperity Integration Suite"
+        - Key: "Technical:ApplicationSubName"
+          Value: "CDP BulkApi for batch application"
+        - Key: "Technical:Environment"
+          Value: "NONPROD"
+        - Key: "Technical:PlatformOwner"
+          Value: "sujeevan.mahendran@sysco.com"
+        - Key: "Technical:PatchingOwner"
+          Value: "CLOPS"
+Outputs:
+  CDPBulkApiFargateTG:
+    Description: The TG of the CDP Bulk Api
+    Value: !Ref CDPBulkApiFargateTG
+    Export:
+      Name: CDPBulkApiFargateTG
+  CDPBulkApiFargateAlbSG:
+    Description: The Security group id of the load balancer
+    Value: !Ref CDPBulkApiFargateAlbSG
+    Export:
+      Name: CDPBulkApiFargateAlbSG
+  CDPBulkApiFargateALB:
+    Description: The arn of the load balancer
+    Value: !Ref CDPBulkApiFargateALB
+    Export:
+      Name: CDPBulkApiFargateALB
+  CDPBulkApiCluster:
+    Description: The Cluster of the CDP Bulk Api
+    Value: !Ref CDPBulkApiCluster
+    Export:
+      Name: CDPBulkApiCluster

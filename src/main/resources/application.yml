@@ -1,0 +1,93 @@
+spring:
+  application:
+    name: cdp-bulk-api
+
+  security:
+    user:
+      name: test
+      password: test
+
+  cdp-database:
+    driver-class-name: org.postgresql.Driver
+    jdbcUrl: jdbc:postgresql://localhost:5432/sample?createDatabaseIfNotExist=true
+    autoCommit: true
+    username: postgres
+    password: postgres
+    minimumIdle: 10
+    maximumPoolSize: 500
+    idleTimeout: 180000
+    maxLifetime: 600000
+    schema: cdp-batch
+    continueOnError: true
+    initialize: false
+    initialSize: 0
+
+  jpa:
+    properties:
+      hibernate:
+        temp:
+          use_jdbc_metadata_defaults: false
+        format_sql: false
+        order_inserts: true
+        jdbc:
+          batch_size: 100000
+          lob:
+            non_contextual_creation: true
+        hbm2ddl:
+          auto: update
+    show-sql: false
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    generate-ddl: true
+    hibernate:
+      ddl-auto: update
+
+management:
+  endpoints:
+    web:
+      base-path: /check
+      exposure:
+        include: health
+
+job:
+  processor:
+    thread:
+      core-pool:
+        size: 5
+      keep-live:
+        seconds: 60
+      max-pool:
+        size: 10
+      queue:
+        capacity: 100
+
+cors:
+  allowed:
+    origins: '*'
+
+springdoc:
+  paths-to-exclude: /swagger-resources/**
+  api-docs:
+    groups:
+      enabled: true
+  swagger-ui:
+    disable-swagger-default-url: false
+    operations-sorter: method
+  writer-with-default-pretty-printer: true
+  default-produces-media-type: application/json
+  override-with-generic-response: true
+  show-actuator: false
+
+interval-in-cron: 0 30 6 * * *
+
+s3:
+  source:
+    bucket: amperity-processeddata-cdp-dev
+    folder: amperity
+  destination:
+    bucket: cdp-bulk-temp-bucket-dev
+  activate:
+    folder: cdp-data
+  url:
+    expire:
+      duration: 1
+      timeUnit: day # minute, hour, day

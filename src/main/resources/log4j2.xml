@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration packages="com.cmsujeevan" status="INFO" strict="true">
+    <Appenders>
+        <Console name="ConsoleAppender" target="SYSTEM_OUT">
+            <PatternLayout>
+                    <pattern>{ "correlationId" : "%X{correlationId}", "jobId" : "%X{job_id}", "message": %msg, "timestamp": "%d{dd-MM-yyyy HH:mm:ss.SSS}", "thread": "%thread", "level": "%-5level", "logger": "%logger{36}.%M" }%n
+                </pattern>
+            </PatternLayout>
+        </Console>
+
+    </Appenders>
+    <Loggers>
+        <AsyncLogger level="INFO" name="com.cmsujeevan" additivity="false">
+            <AppenderRef ref="ConsoleAppender"/>
+        </AsyncLogger>
+        <AsyncRoot level="INFO">
+            <AppenderRef ref="ConsoleAppender"/>
+        </AsyncRoot>
+    </Loggers>
+</Configuration>

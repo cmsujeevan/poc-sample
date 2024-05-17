@@ -1,0 +1,317 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudFormation template for creating CDP bulk api service, task definition and IAM role"
+
+Resources:
+  CDPBulkApiExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'CDP_Bulk_Api_Execution_Role'
+      PermissionsBoundary: !Sub "arn:aws:iam::${AWS::AccountId}:policy/PermissionBoundary-DevOps"
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs.amazonaws.com
+                - ecs-tasks.amazonaws.com
+                - events.amazonaws.com
+            Action: [ 'sts:AssumeRole' ]
+      Path: /
+      Policies:
+        - PolicyName: !Sub 'CDP_Bulk_Api_Secret_Role_Policy'
+          PolicyDocument:
+            Statement:
+              - Sid: SecretManagerGetSecretPolicy
+                Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: '*'
+        - PolicyName: !Sub 'CDP_Bulk_Api_Role_Policy'
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ecr:GetAuthorizationToken'
+                  - 'ecr:BatchCheckLayerAvailability'
+                  - 'ecr:GetDownloadUrlForLayer'
+                  - 'ecr:BatchGetImage'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogStream'
+                  - 'logs:CreateLogGroup'
+                  - 'logs:PutLogEvents'
+                  - 'logs:DescribeLogStreams'
+                Resource: '*'
+        - PolicyName: cdp-bulk-api-destination-s3-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                  - 's3:GetBucketLocation'
+                  - 's3:GetObjectVersion'
+                  - 's3:PutObject'
+                  - 's3:PutObjectAcl'
+                  - 's3:GetLifecycleConfiguration'
+                  - 's3:PutLifecycleConfiguration'
+                  - 's3:DeleteObject'
+                Resource:
+                  - 'arn:aws:s3:::amperity-processeddata-cdp-dev'
+                  - 'arn:aws:s3:::amperity-processeddata-cdp-dev/*'
+                  - 'arn:aws:s3:::cdp-bulk-temp-bucket-dev'
+                  - 'arn:aws:s3:::cdp-bulk-temp-bucket-dev/*'
+        - PolicyName: cdp-bulk-api-ecs-service
+          PolicyDocument:
+            Statement:
+                - Effect: Allow
+                  Action:
+                    - 'ec2:AttachNetworkInterface'
+                    - 'ec2:CreateNetworkInterface'
+                    - 'ec2:CreateNetworkInterfacePermission'
+                    - 'ec2:DeleteNetworkInterface'
+                    - 'ec2:DeleteNetworkInterfacePermission'
+                    - 'ec2:Describe*'
+                    - 'ec2:DetachNetworkInterface'
+                    - 'elasticloadbalancing:DeregisterInstancesFromLoadBalancer'
+                    - 'elasticloadbalancing:DeregisterTargets'
+                    - 'elasticloadbalancing:Describe*'
+                    - 'elasticloadbalancing:RegisterInstancesWithLoadBalancer'
+                    - 'elasticloadbalancing:RegisterTargets'
+                  Resource: '*'
+        - PolicyName: cdp-datadog-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ecs:ListClusters'
+                  - 'ecs:ListContainerInstances'
+                  - 'ecs:ListServices'
+                  - 'ecs:DescribeContainerInstances'
+                  - 'ecs:ListTagsForResource'
+                Resource:
+                  - '*'
+      Tags:
+        - Key: "Technical:ApplicationID"
+          Value: "APP-004158"
+        - Key: "Technical:ApplicationName"
+          Value: "Amperity Integration Suite"
+        - Key: "Technical:ApplicationSubName"
+          Value: "CDP BulkApi for batch application"
+        - Key: "Technical:Environment"
+          Value: "NONPROD"
+        - Key: "Technical:PlatformOwner"
+          Value: "sujeevan.mahendran@sysco.com"
+        - Key: "Technical:PatchingOwner"
+          Value: "CLOPS"
+  ServiceLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: "cdp-bulk-api-logs"
+      Tags:
+        - Key: "Technical:ApplicationID"
+          Value: "APP-004158"
+        - Key: "Technical:ApplicationName"
+          Value: "Amperity Integration Suite"
+        - Key: "Technical:ApplicationSubName"
+          Value: "CDP BulkApi for batch application"
+        - Key: "Technical:Environment"
+          Value: "NONPROD"
+        - Key: "Technical:PlatformOwner"
+          Value: "sujeevan.mahendran@sysco.com"
+        - Key: "Technical:PatchingOwner"
+          Value: "CLOPS"
+  CDPBulkApiTaskDefinition:
+    Type: 'AWS::ECS::TaskDefinition'
+    Properties:
+      RequiresCompatibilities:
+        - "FARGATE"
+      ExecutionRoleArn: !Ref CDPBulkApiExecutionRole
+      TaskRoleArn: !Ref CDPBulkApiExecutionRole
+      Cpu: 2048
+      Memory: 16384
+      NetworkMode: "awsvpc"
+      ContainerDefinitions:
+        - Name: "cdp-bulk-api-app"
+          Image: !Join
+            - ''
+            - - !Ref 'AWS::AccountId'
+              - .dkr.ecr.
+              - !Ref 'AWS::Region'
+              - '.amazonaws.com/cdp-bulk-api-repo:1.0.0'
+          PortMappings:
+            - ContainerPort: 8080
+          LogConfiguration:
+            LogDriver: awsfirelens
+            Options:
+              Name: datadog
+              apikey: '{{resolve:secretsmanager:DD_API_KEY_SECRET_ARN:SecretString}}'
+              Host: http-intake.logs.datadoghq.com
+              dd_service: "cdp-bulk-api-app-service"
+              dd_source: "cdp-bulk-api-source"
+              dd_message_key: "log"
+              dd_tags: "cdp:bulk-api"
+              TLS: "on"
+              provider: ecs
+#          DockerLabels:
+#            "com.datadoghq.tags.service": "cdp-bulk-api"
+#            "com.datadoghq.ad.instances": "[{\"host\": \"%%host%%\", \"port\": 8080}]"
+#            "com.datadoghq.ad.check_names": "[\"cdp-bulk-api-app\"]"
+#            "com.datadoghq.ad.init_configs": "[{}]"
+          MemoryReservation: 8144
+        - Name: datadog-agent
+          Image: datadog/agent:latest
+          Environment:
+            - Name: DD_API_KEY
+              Value: '{{resolve:secretsmanager:DD_API_KEY_SECRET_ARN:SecretString}}'
+            - Name: ECS_FARGATE
+              Value: true
+            - Name: DD_TAGS
+              Value: customer_name:customer_data_platform-bulk_api
+          MemoryReservation: 256
+        - Name: log_router
+          Essential: true
+          Image: amazon/aws-for-fluent-bit:stable
+          FirelensConfiguration:
+            Type: fluentbit
+            Options:
+              "enable-ecs-log-metadata": true
+#              "config-file-type": file
+#              "config-file-value": /fluent-bit/configs/parse-json.conf
+          MemoryReservation: 50
+      Tags:
+        - Key: "Technical:ApplicationID"
+          Value: "APP-004158"
+        - Key: "Technical:ApplicationName"
+          Value: "Amperity Integration Suite"
+        - Key: "Technical:ApplicationSubName"
+          Value: "CDP BulkApi for batch application"
+        - Key: "Technical:Environment"
+          Value: "NONPROD"
+        - Key: "Technical:PlatformOwner"
+          Value: "sujeevan.mahendran@sysco.com"
+        - Key: "Technical:PatchingOwner"
+          Value: "CLOPS"
+  CDPBulkApiECSService:
+    Type: 'AWS::ECS::Service'
+    DependsOn:
+      - CDPBulkApiListener
+    Properties:
+      ServiceName: cdp-bulk-api-service
+      LaunchType: FARGATE
+      Cluster: !ImportValue CDPBulkApiCluster
+      DesiredCount: 1
+      TaskDefinition:
+        Ref: "CDPBulkApiTaskDefinition"
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          SecurityGroups:
+             - !ImportValue CDPBulkApiFargateAlbSG
+          Subnets: ['subnet-097c382849f67d2e4','subnet-0301c81558ee32019','subnet-0bc4b01e060c597fa']
+      LoadBalancers:
+        - TargetGroupArn: !ImportValue CDPBulkApiFargateTG
+          ContainerPort: 8080
+          ContainerName: cdp-bulk-api-app
+      Tags:
+        - Key: "Technical:ApplicationID"
+          Value: "APP-004158"
+        - Key: "Technical:ApplicationName"
+          Value: "Amperity Integration Suite"
+        - Key: "Technical:ApplicationSubName"
+          Value: "CDP BulkApi for batch application"
+        - Key: "Technical:Environment"
+          Value: "NONPROD"
+        - Key: "Technical:PlatformOwner"
+          Value: "sujeevan.mahendran@sysco.com"
+        - Key: "Technical:PatchingOwner"
+          Value: "CLOPS"
+  CDPBulkApiListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !ImportValue CDPBulkApiFargateTG
+          Type: forward
+      LoadBalancerArn: !ImportValue CDPBulkApiFargateALB
+      Port: 80
+      Protocol: HTTP
+  CDPBulkDataTempBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: cdp-bulk-temp-bucket-dev
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'AES256'
+      LifecycleConfiguration:
+        Rules:
+          - Id: Rule for objects retention
+            Status: Enabled
+            ExpirationInDays: 1
+      Tags:
+        - Key: "Technical:ApplicationID"
+          Value: "APP-004158"
+        - Key: "Technical:ApplicationName"
+          Value: "Amperity Integration Suite"
+        - Key: "Technical:ApplicationSubName"
+          Value: "CDP-BulkApi bucket"
+        - Key: "Technical:Environment"
+          Value: "NONPROD"
+        - Key: "Technical:PlatformOwner"
+          Value: "sujeevan.mahendran@sysco.com"
+        - Key: "AppVersion"
+          Value: "8.0.0"
+        - Key: "Technical:PatchingOwner"
+          Value: "CLOPS"
+  CDPS3ElbAccessLogs:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: cdp-s3-elb-access-logs
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'AES256'
+      LifecycleConfiguration:
+        Rules:
+          - Id: Rule for objects retention
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: "Technical:ApplicationID"
+          Value: "APP-004158"
+        - Key: "Technical:ApplicationName"
+          Value: "Amperity Integration Suite"
+        - Key: "Technical:ApplicationSubName"
+          Value: "CDP-BulkApi bucket"
+        - Key: "Technical:Environment"
+          Value: "NONPROD"
+        - Key: "Technical:PlatformOwner"
+          Value: "sujeevan.mahendran@sysco.com"
+        - Key: "AppVersion"
+          Value: "8.0.0"
+        - Key: "Technical:PatchingOwner"
+          Value: "CLOPS"
+
+# The error occurs directly from CloudFormation, and as it says, the bucket we're adding the policy to, already has an existing one.
+# CloudFormation does not allow for replacement/modification of bucket policies that were created outside of its control.
+# This is a security measure preventing you by accidentally changing existing policies.
+# If we want to control the bucket policy with CloudFormation we have to recreate it in CloudFormation, delete the original one, and create using the CloudFormation.
+# But public access is blocked for the bucket because Block Public Access settings are turned on for Sysco account.
+
+#  CDPS3ElbBucketPolicy:
+#    Type: "AWS::S3::BucketPolicy"
+#    Properties:
+#      Bucket: !Ref CDPS3ElbAccessLogs
+#      PolicyDocument:
+#        Version: "2012-10-17"
+#        Statement:
+#          - Sid: AllowELBOnly
+#            Effect: Allow
+#            Principal:
+#              AWS: 'arn:aws:iam::127311923021:root'
+#            Action: 's3:PutObject'
+#            Resource:
+#              - 'arn:aws:s3:::cdp-s3-elb-access-logs/*'
+#              - 'arn:aws:s3:::cdp-s3-elb-access-logs'

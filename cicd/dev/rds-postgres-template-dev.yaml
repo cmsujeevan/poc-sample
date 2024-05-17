@@ -1,0 +1,56 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'This stack deploys CDP postgres RDS for CDP batch application.'
+
+Resources:
+  CDPDatabaseSG:
+    Type: 'AWS::RDS::DBSecurityGroup'
+    Properties:
+      GroupDescription: SecurityGroup for the CDP postgres RDS
+      DBSecurityGroupIngress:
+        CIDRIP: 10.0.0.0/8
+      EC2VpcId: vpc-0e250f7222c45e412
+      Tags:
+        - Key: "Technical:ApplicationID"
+          Value: "APP-004158"
+        - Key: "Technical:ApplicationName"
+          Value: "Amperity Integration Suite"
+        - Key: "Technical:ApplicationSubName"
+          Value: "CDP postgres RDS for CDP batch application"
+        - Key: "Technical:Environment"
+          Value: "NONPROD"
+        - Key: "Technical:PlatformOwner"
+          Value: "sujeevan.mahendran@sysco.com"
+        - Key: "Technical:PatchingOwner"
+          Value: "CLOPS"
+  CDPDatabase:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      DBInstanceIdentifier: cdp-database
+      DBName: cdp
+      DBInstanceClass: db.t3.small
+      AllocatedStorage: 5
+      MaxAllocatedStorage: 50
+      StorageType: gp2
+      Engine: Postgres
+      EngineVersion: "13.7"
+      MasterUsername: '{{resolve:secretsmanager:/cdp/db/postgres/dev:SecretString:username}}'
+      MasterUserPassword: '{{resolve:secretsmanager:/cdp/db/postgres/dev:SecretString:password}}'
+      Port: 5430
+      DBSecurityGroups:
+        - Ref: CDPDatabaseSG
+      DBSubnetGroupName: default-vpc-0e250f7222c45e412
+      Tags:
+        - Key: "Technical:ApplicationID"
+          Value: "APP-004158"
+        - Key: "Technical:ApplicationName"
+          Value: "Amperity Integration Suite"
+        - Key: "Technical:ApplicationSubName"
+          Value: "CDP Postgres RDS for batch application"
+        - Key: "Technical:Environment"
+          Value: "NONPROD"
+        - Key: "Technical:PlatformOwner"
+          Value: "sujeevan.mahendran@sysco.com"
+        - Key: "Automation:PMC"
+          Value: "Always On"
+        - Key: "Technical:PatchingOwner"
+          Value: "CLOPS"
